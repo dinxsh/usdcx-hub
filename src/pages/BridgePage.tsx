@@ -11,6 +11,7 @@ interface BridgePageProps {
   stacksWallet: StacksWallet;
   onConnectEthereum: () => void;
   onConnectStacks: () => void;
+  usdcBalance?: number;
 }
 
 export function BridgePage({
@@ -18,10 +19,14 @@ export function BridgePage({
   stacksWallet,
   onConnectEthereum,
   onConnectStacks,
+  usdcBalance: externalUsdcBalance,
 }: BridgePageProps) {
   const bridge = useBridge();
   const isFullyConnected =
     ethereumWallet.status === "connected" && stacksWallet.status === "connected";
+
+  // Use external balance if available, otherwise fall back to mock
+  const usdcBalance = externalUsdcBalance ?? bridge.usdcBalance;
 
   return (
     <div className="container py-6 px-4 lg:py-8">
@@ -46,7 +51,7 @@ export function BridgePage({
             onAmountChange={bridge.setAmount}
             strategy={bridge.strategy}
             onStrategyChange={bridge.setStrategy}
-            usdcBalance={bridge.usdcBalance}
+            usdcBalance={usdcBalance}
             status={bridge.status}
             isLoading={bridge.isLoading}
             currentStep={bridge.currentStep}
