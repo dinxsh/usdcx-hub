@@ -45,3 +45,80 @@ pnpm dev
 ```
 
 Then open `http://localhost:3000` and connect test wallets.
+
+## Tech
+
+```mermaid
+flowchart LR
+    %% USERS & WALLETS
+    subgraph UserDevice["User Browser / Client"]
+        direction TB
+        UI["USDCx Liquidity Hub UI\n(Next.js / React)"]
+        ETHConn["Ethereum Wallet Connector\n(MetaMask / EIP-1193)"]
+        STXConn["Stacks Wallet Connector\n(Hiro / @stacks/connect)"]
+    end
+
+    subgraph EthereumLayer["Ethereum L1"]
+        direction TB
+        USDC["USDC\nERC-20 Contract"]
+        XReserve["Circle xReserve\nBridge Contract"]
+        ETHRPC["Ethereum RPC\n(HTTPS / WebSocket)"]
+    end
+
+    subgraph BridgeInfra["Bridge & Attestation Infra"]
+        direction TB
+        EVTListener["Event Listener\n(Off-chain Service)"]
+        Attestor["Attestation Service\n(Circle xReserve ↔ Stacks)"]
+    end
+
+    subgraph StacksLayer["Stacks Network"]
+        direction TB
+        USDCx["USDCx Token\nSIP-010 FT"]
+        Vault["USDCx Vault Contract\n(Clarity)\n- deposit-usdcx\n- withdraw-usdcx"]
+        STXRPC["Stacks RPC / API\n(read-only + tx broadcast)"]
+    end
+
+    subgraph OffchainBackend["Optional Backend / Indexer"]
+        direction TB
+        Indexer["Index / Portfolio Service\n(aggregates ETH + STX positions)"]
+    end
+
+    %% USER TO UI
+    UI <---> ETHConn
+    UI <---> STXConn
+
+    %% UI TO RPC / BACKEND
+    UI --> ETHRPC
+    UI --> STXRPC
+    UI <---> Indexer
+
+    %% ETH SIDE FLOW
+    ETHConn --> USDC
+    ETHConn --> XReserve
+    ETHRPC <---> USDC
+    ETHRPC <---> XReserve
+
+    %% EVENT / ATTESTATION FLOW
+    XReserve --> EVTListener
+    EVTListener --> Attestor
+    Attestor --> USDCx
+    Attestor --> STXRPC
+
+    %% STACKS SIDE FLOW
+    STXConn --> USDCx
+    STXConn --> Vault
+    STXRPC <---> USDCx
+    STXRPC <---> Vault
+
+    %% DATA AGGREGATION
+    ETHRPC --> Indexer
+    STXRPC --> Indexer
+
+    %% LABELLED EDGES (HIGH-LEVEL)
+    UI -. "1. User sets amount,\n chooses strategy" .- UI
+    ETHConn -. "2. approve(USDC → xReserve)" .-> USDC
+    ETHConn -. "3. deposit(USDC → xReserve,\n includes Stacks addr)" .-> XReserve
+    Attestor -. "4. Mint USDCx to\nStacks principal" .-> USDCx
+    STXConn -. "5. deposit-usdcx(amount)" .-> Vault
+    STXConn -. "withdraw-usdcx(shares)" .-> Vault
+```
