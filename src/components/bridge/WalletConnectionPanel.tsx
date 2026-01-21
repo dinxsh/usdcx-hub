@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Wallet, Layers, Check, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { EthereumWallet, StacksWallet } from "@/types";
-import { formatAddress } from "@/hooks/useWallets";
+import { formatAddress } from "@/hooks/useEthereumWallet";
 
 interface WalletConnectionPanelProps {
   ethereumWallet: EthereumWallet;

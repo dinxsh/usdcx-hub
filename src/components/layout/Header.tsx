@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Wallet, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatAddress } from "@/hooks/useWallets";
+import { formatAddress } from "@/hooks/useEthereumWallet";
 import { EthereumWallet, StacksWallet } from "@/types";
 
 interface HeaderProps {
