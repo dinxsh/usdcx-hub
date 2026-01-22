@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Header } from "./Header";
 import { Footer } from "./Footer";
+import { NetworkSwitcher } from "@/components/NetworkSwitcher";
 import { EthereumWallet, StacksWallet } from "@/types";
 
 interface LayoutProps {
@@ -26,6 +27,7 @@ export function Layout({
         onConnectEthereum={onConnectEthereum}
         onConnectStacks={onConnectStacks}
       />
+      <NetworkSwitcher />
       <main className="flex-1">{children}</main>
       <Footer />
     </div>
