@@ -1,38 +1,109 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { BridgeStep, BridgeStatus, StrategyType, TxItem, StatusMessage } from "@/types";
+import { useEthereumBridge } from "./useEthereumBridge";
+import { useStacksContracts } from "./useStacksContracts";
+import { mainnet, sepolia } from "@/config/wagmi";
+import { useChainId } from "wagmi";
 
-// Mock bridge hook - ready for real integration
-export function useBridge() {
+// Bridge hook with real contract integration
+export function useBridge(stacksPrincipal: string | null) {
+  const chainId = useChainId();
+  const ethereumBridge = useEthereumBridge();
+  const stacksContracts = useStacksContracts(stacksPrincipal);
+  
   const [currentStep, setCurrentStep] = useState<BridgeStep>(1);
   const [errorStep, setErrorStep] = useState<BridgeStep | undefined>();
   const [status, setStatus] = useState<BridgeStatus>("idle");
-  const [isLoading, setIsLoading] = useState(false);
   const [amount, setAmount] = useState("");
   const [strategy, setStrategy] = useState<StrategyType>("wallet");
+  const [transactions, setTransactions] = useState<TxItem[]>([]);
 
-  // Mock balances
-  const usdcBalance = 1250.75;
-  const usdcxBalance = 850.25;
+  // Get explorer URLs based on chain
+  const getEtherscanUrl = (hash: string) => {
+    if (chainId === sepolia.id) {
+      return `https://sepolia.etherscan.io/tx/${hash}`;
+    }
+    return `https://etherscan.io/tx/${hash}`;
+  };
 
-  // Mock transaction history
-  const [transactions, setTransactions] = useState<TxItem[]>([
-    {
-      id: "1",
-      label: "Bridge to USDCx",
-      subtitle: "500.00 USDC → USDCx",
-      status: "confirmed",
-      explorerUrl: "https://etherscan.io/tx/0x123",
-      timestamp: new Date(Date.now() - 86400000),
-    },
-    {
-      id: "2",
-      label: "Vault Deposit",
-      subtitle: "250.00 USDCx",
-      status: "confirmed",
-      explorerUrl: "https://explorer.stacks.co/txid/0x456",
-      timestamp: new Date(Date.now() - 172800000),
-    },
-  ]);
+  // Track approval status changes
+  useEffect(() => {
+    if (ethereumBridge.approvalStatus === "pending") {
+      setStatus("awaiting_approval");
+    } else if (ethereumBridge.approvalStatus === "confirming") {
+      setStatus("approving");
+      setCurrentStep(2);
+    } else if (ethereumBridge.approvalStatus === "success") {
+      setStatus("awaiting_bridge");
+      setCurrentStep(3);
+      
+      // Add to transaction history
+      if (ethereumBridge.approvalHash) {
+        setTransactions((prev) => {
+          // Don't add if already exists
+          if (prev.some(tx => tx.id === ethereumBridge.approvalHash)) return prev;
+          return [
+            {
+              id: ethereumBridge.approvalHash!,
+              label: "USDC Approval",
+              subtitle: `${amount} USDC approved`,
+              status: "confirmed",
+              explorerUrl: getEtherscanUrl(ethereumBridge.approvalHash!),
+              timestamp: new Date(),
+            },
+            ...prev,
+          ];
+        });
+      }
+    } else if (ethereumBridge.approvalStatus === "error") {
+      setErrorStep(2);
+      setStatus("idle");
+    }
+  }, [ethereumBridge.approvalStatus, ethereumBridge.approvalHash, amount, chainId]);
+
+  // Track bridge status changes
+  useEffect(() => {
+    if (ethereumBridge.bridgeStatus === "pending") {
+      setStatus("bridging");
+    } else if (ethereumBridge.bridgeStatus === "confirming") {
+      setStatus("bridging");
+    } else if (ethereumBridge.bridgeStatus === "success") {
+      // Bridge confirmed on Ethereum, now waiting for minting on Stacks
+      setStatus("minting");
+      
+      // Add to transaction history
+      if (ethereumBridge.bridgeHash) {
+        setTransactions((prev) => {
+          if (prev.some(tx => tx.id === ethereumBridge.bridgeHash)) return prev;
+          return [
+            {
+              id: ethereumBridge.bridgeHash!,
+              label: "Bridge to USDCx",
+              subtitle: `${amount} USDC → USDCx`,
+              status: "confirmed",
+              explorerUrl: getEtherscanUrl(ethereumBridge.bridgeHash!),
+              timestamp: new Date(),
+            },
+            ...prev,
+          ];
+        });
+      }
+      
+      // Simulate minting delay (in production, you'd poll for USDCx arrival)
+      setTimeout(() => {
+        if (strategy === "vault") {
+          setStatus("awaiting_deposit");
+          setCurrentStep(4);
+        } else {
+          setStatus("complete");
+          setCurrentStep(5);
+        }
+      }, 3000);
+    } else if (ethereumBridge.bridgeStatus === "error") {
+      setErrorStep(3);
+      setStatus("awaiting_bridge");
+    }
+  }, [ethereumBridge.bridgeStatus, ethereumBridge.bridgeHash, amount, strategy, chainId]);
 
   const statusMessages: Record<BridgeStatus, StatusMessage> = {
     idle: {
@@ -57,7 +128,7 @@ export function useBridge() {
     },
     minting: {
       title: "Minting USDCx on Stacks...",
-      subtitle: "Almost there! Your USDCx is being minted.",
+      subtitle: "Almost there! Your USDCx is being minted on Stacks.",
     },
     awaiting_deposit: {
       title: "USDCx received!",
@@ -88,92 +159,110 @@ export function useBridge() {
     return stepProgress[currentStep];
   }, [currentStep]);
 
+  // Check if approval is needed
+  const needsApproval = useCallback(() => {
+    if (!amount) return true;
+    return !ethereumBridge.hasAllowance(amount);
+  }, [amount, ethereumBridge]);
+
+  // Approve USDC spending
   const approve = useCallback(async () => {
-    setIsLoading(true);
-    setStatus("approving");
+    if (!amount) return;
+    
+    setErrorStep(undefined);
     setCurrentStep(2);
-
-    // Simulate approval
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    setIsLoading(false);
-    setStatus("awaiting_bridge");
-    setCurrentStep(3);
-  }, []);
-
-  const bridge = useCallback(async () => {
-    setIsLoading(true);
-    setStatus("bridging");
-
-    // Simulate bridging
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-
-    setStatus("minting");
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    if (strategy === "vault") {
-      setStatus("awaiting_deposit");
-      setCurrentStep(4);
-    } else {
-      setStatus("complete");
-      setCurrentStep(5);
+    
+    try {
+      await ethereumBridge.approveUsdc(amount);
+    } catch (error) {
+      console.error("Approval error:", error);
+      setErrorStep(2);
     }
+  }, [amount, ethereumBridge]);
 
-    setIsLoading(false);
+  // Bridge USDC to Stacks
+  const bridge = useCallback(async () => {
+    if (!amount || !stacksPrincipal) return;
+    
+    setErrorStep(undefined);
+    setCurrentStep(3);
+    
+    try {
+      await ethereumBridge.bridgeToStacks(amount, stacksPrincipal);
+    } catch (error) {
+      console.error("Bridge error:", error);
+      setErrorStep(3);
+    }
+  }, [amount, stacksPrincipal, ethereumBridge]);
 
-    // Add to transaction history
-    setTransactions((prev) => [
-      {
-        id: Date.now().toString(),
-        label: "Bridge to USDCx",
-        subtitle: `${amount} USDC → USDCx`,
-        status: "confirmed",
-        explorerUrl: "https://explorer.stacks.co/txid/0x789",
-        timestamp: new Date(),
-      },
-      ...prev,
-    ]);
-  }, [amount, strategy]);
-
+  // Deposit USDCx into vault
   const deposit = useCallback(async () => {
-    setIsLoading(true);
+    if (!amount) return;
+    
+    setErrorStep(undefined);
     setStatus("depositing");
     setCurrentStep(4);
+    
+    try {
+      await stacksContracts.depositToVault(parseFloat(amount));
+      
+      // Add to transaction history
+      setTransactions((prev) => [
+        {
+          id: Date.now().toString(),
+          label: "Vault Deposit",
+          subtitle: `${amount} USDCx`,
+          status: "pending",
+          explorerUrl: undefined,
+          timestamp: new Date(),
+        },
+        ...prev,
+      ]);
+      
+      setStatus("complete");
+      setCurrentStep(5);
+    } catch (error) {
+      console.error("Deposit error:", error);
+      setErrorStep(4);
+      setStatus("awaiting_deposit");
+    }
+  }, [amount, stacksContracts]);
 
-    // Simulate deposit
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    setIsLoading(false);
-    setStatus("complete");
-    setCurrentStep(5);
-
-    // Add to transaction history
-    setTransactions((prev) => [
-      {
-        id: Date.now().toString(),
-        label: "Vault Deposit",
-        subtitle: `${amount} USDCx`,
-        status: "confirmed",
-        explorerUrl: "https://explorer.stacks.co/txid/0xabc",
-        timestamp: new Date(),
-      },
-      ...prev,
-    ]);
-  }, [amount]);
-
+  // Reset the bridge flow
   const reset = useCallback(() => {
     setCurrentStep(1);
     setErrorStep(undefined);
     setStatus("idle");
-    setIsLoading(false);
     setAmount("");
     setStrategy("wallet");
-  }, []);
+    ethereumBridge.reset();
+  }, [ethereumBridge]);
 
+  // Retry a failed step
   const retryStep = useCallback(() => {
+    if (!errorStep) return;
+    
     setErrorStep(undefined);
-    // Retry logic would go here
-  }, []);
+    
+    switch (errorStep) {
+      case 2:
+        approve();
+        break;
+      case 3:
+        bridge();
+        break;
+      case 4:
+        deposit();
+        break;
+    }
+  }, [errorStep, approve, bridge, deposit]);
+
+  // Determine if loading based on pending transactions
+  const isLoading = 
+    ethereumBridge.isApprovalPending || 
+    ethereumBridge.isBridgePending ||
+    status === "depositing" ||
+    status === "minting";
 
   return {
     currentStep,
@@ -184,15 +273,19 @@ export function useBridge() {
     setAmount,
     strategy,
     setStrategy,
-    usdcBalance,
-    usdcxBalance,
+    usdcBalance: ethereumBridge.usdcBalance,
+    usdcxBalance: stacksContracts.usdcxBalance,
     transactions,
     currentStatusMessage,
     progressPercent,
+    needsApproval,
     approve,
     bridge,
     deposit,
     reset,
     retryStep,
+    // Expose transaction hashes for UI
+    approvalHash: ethereumBridge.approvalHash,
+    bridgeHash: ethereumBridge.bridgeHash,
   };
 }
