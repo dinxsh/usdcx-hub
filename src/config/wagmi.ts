@@ -1,16 +1,44 @@
 import "@rainbow-me/rainbowkit/styles.css";
-import { getDefaultConfig } from "@rainbow-me/rainbowkit";
+import { getDefaultConfig, connectorsForWallets } from "@rainbow-me/rainbowkit";
+import {
+  rainbowWallet,
+  walletConnectWallet,
+  coinbaseWallet,
+  injectedWallet,
+} from "@rainbow-me/rainbowkit/wallets";
+import { createConfig, http } from "wagmi";
 import { mainnet, sepolia } from "wagmi/chains";
 
 // RainbowKit configuration
 // For production, replace with your own WalletConnect Project ID from https://cloud.walletconnect.com
 const WALLETCONNECT_PROJECT_ID = "3a8170812b534d0ff9d794f19a901d64";
 
-export const wagmiConfig = getDefaultConfig({
-  appName: "USDCx Liquidity Hub",
-  projectId: WALLETCONNECT_PROJECT_ID,
+// Create connectors without MetaMask auto-detection to avoid extension conflicts
+const connectors = connectorsForWallets(
+  [
+    {
+      groupName: "Recommended",
+      wallets: [
+        injectedWallet, // Generic injected wallet (works with MetaMask, etc.)
+        rainbowWallet,
+        walletConnectWallet,
+        coinbaseWallet,
+      ],
+    },
+  ],
+  {
+    appName: "USDCx Liquidity Hub",
+    projectId: WALLETCONNECT_PROJECT_ID,
+  }
+);
+
+export const wagmiConfig = createConfig({
+  connectors,
   chains: [mainnet, sepolia],
-  ssr: false,
+  transports: {
+    [mainnet.id]: http(),
+    [sepolia.id]: http(),
+  },
 });
 
 // USDC contract addresses
