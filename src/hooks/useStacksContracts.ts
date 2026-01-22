@@ -7,13 +7,10 @@ import {
 } from "@stacks/transactions";
 import { USDCX_CONTRACT, VAULT_CONTRACT, STACKS_APP_DETAILS, activeStacksNetwork } from "@/config/stacks";
 
-interface UseStacksContractsProps {
-  principal: string | null;
-}
-
-export function useStacksContracts({ principal }: UseStacksContractsProps) {
+export function useStacksContracts(principal: string | null) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usdcxBalance, setUsdcxBalance] = useState<number>(0);
 
   // Get USDCx balance using Stacks API
   const getUsdcxBalance = useCallback(async (): Promise<number> => {
@@ -144,6 +141,7 @@ export function useStacksContracts({ principal }: UseStacksContractsProps) {
   return {
     isLoading,
     error,
+    usdcxBalance,
     getUsdcxBalance,
     depositToVault,
     withdrawFromVault,

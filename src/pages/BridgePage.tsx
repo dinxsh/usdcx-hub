@@ -21,12 +21,13 @@ export function BridgePage({
   onConnectStacks,
   usdcBalance: externalUsdcBalance,
 }: BridgePageProps) {
-  const bridge = useBridge();
+  // Pass the Stacks principal to useBridge for encoding the recipient address
+  const bridge = useBridge(stacksWallet.principal);
   const isFullyConnected =
     ethereumWallet.status === "connected" && stacksWallet.status === "connected";
 
-  // Use external balance if available, otherwise fall back to mock
-  const usdcBalance = externalUsdcBalance ?? bridge.usdcBalance;
+  // Use bridge hook's real balance (from useEthereumBridge), fall back to external if provided
+  const usdcBalance = bridge.usdcBalance || externalUsdcBalance || 0;
 
   return (
     <div className="container py-6 px-4 lg:py-8">
