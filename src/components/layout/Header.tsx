@@ -1,8 +1,10 @@
 import { Link, useLocation } from "react-router-dom";
+import { useChainId } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { Wallet, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatAddress } from "@/hooks/useEthereumWallet";
+import { mainnet, sepolia } from "@/config/wagmi";
 import { EthereumWallet, StacksWallet } from "@/types";
 
 interface HeaderProps {
@@ -12,6 +14,18 @@ interface HeaderProps {
   onConnectStacks: () => void;
 }
 
+// Get network display name
+function getNetworkName(chainId: number): string {
+  switch (chainId) {
+    case mainnet.id:
+      return "Mainnet";
+    case sepolia.id:
+      return "Sepolia";
+    default:
+      return "Unknown";
+  }
+}
+
 export function Header({
   ethereumWallet,
   stacksWallet,
@@ -19,11 +33,15 @@ export function Header({
   onConnectStacks,
 }: HeaderProps) {
   const location = useLocation();
+  const chainId = useChainId();
 
   const navItems = [
     { path: "/", label: "Bridge & Deposit" },
     { path: "/portfolio", label: "Portfolio" },
   ];
+
+  const networkName = getNetworkName(chainId);
+  const isConnected = ethereumWallet.status === "connected";
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -57,6 +75,23 @@ export function Header({
 
         {/* Wallet Buttons */}
         <div className="flex items-center gap-2">
+          {/* Network Badge - shown when connected */}
+          {isConnected && (
+            <div className="hidden items-center gap-1.5 rounded-md border border-border bg-secondary/50 px-2.5 py-1.5 text-xs font-medium sm:flex">
+              <span
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  chainId === mainnet.id
+                    ? "bg-emerald-500"
+                    : chainId === sepolia.id
+                    ? "bg-amber-500"
+                    : "bg-destructive"
+                )}
+              />
+              <span className="text-muted-foreground">{networkName}</span>
+            </div>
+          )}
+
           <Button
             variant="wallet"
             size="sm"
